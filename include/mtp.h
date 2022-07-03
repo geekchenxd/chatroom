@@ -11,6 +11,7 @@ struct mtp {
 	int (*exit)(struct mtp *);
 	int (*send_msg)(struct mtp *mtp, const uint8_t *msg, size_t len);
 	int (*recv_msg)(struct mtp *mtp, uint8_t *msg, size_t len);
+	int (*apdu_handler)(struct mtp *mtp, uint8_t *apdu, size_t len);
 };
 
 

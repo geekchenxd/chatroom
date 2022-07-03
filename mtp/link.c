@@ -92,25 +92,6 @@ close_socket:
 
 }
 
-static int link_tcp_send_msg(struct mtp *mtp, const uint8_t *msg, size_t len)
-{
-	ssize_t size;
-	struct link_data *link;
-
-	if (!mtp || !msg || !len)
-		return -EINVAL;
-
-       	link = mtp->private_data;
-	if (link == NULL)
-		return -EINVAL;
-
-	size = send(link->sock, msg, len);
-	if (size == -1)
-		return -errno;
-
-	return size;
-}
-
 static uint8_t checksum(const uint8_t *data, size_t len)
 {
 	uint8_t sum = 0;
@@ -120,6 +101,49 @@ static uint8_t checksum(const uint8_t *data, size_t len)
 		sum += sum ^= data[i];
 
 	return sum;
+}
+
+static size_t link_tcp_encode(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len)
+{
+	size_t len = in_len;
+
+	if (len > out_len + 5)
+		len = (out_len - 5);
+
+	out[0] = 0x68;
+	out[1] = len >> 8 & 0xff;
+	out[2] = len & 0xff;
+	memcpy(&out[3], in, len);
+	out[3+len] = checksum(in, len);
+	out[4+len] = 0x16;
+
+	return len + 5;
+}
+
+static int link_tcp_send_msg(struct mtp *mtp, const uint8_t *msg, size_t len)
+{
+	ssize_t size;
+	struct link_data *link;
+	uint8_t buffer[MTP_MAX_PDU] = {0x0};
+
+	if (!mtp || !msg || !len)
+		return -EINVAL;
+
+       	link = mtp->private_data;
+	if (link == NULL)
+		return -EINVAL;
+
+	size = link_tcp_encode(msg, len, buffer, MTP_MAX_PDU);
+	size = send(link->sock, buffer, size);
+	if (size == -1)
+		return -errno;
+
+	return size;
+}
+
+static size_t link_data_len(uint8_t *pdu)
+{
+	return pdu[0] | pdu[1] << 8;
 }
 
 static int tcp_receive_timeout(int sock, uint8_t *buf, size_t size, uint32_t timeout)
